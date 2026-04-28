@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RetroWave OPL3</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="container">
+
+  <div class="header-row">
+    <div>
+      <div class="ascii-header">
+██████╗ ███████╗████████╗██████╗  ██████╗ ██╗    ██╗ █████╗ ██╗   ██╗███████╗
+██╔══██╗██╔════╝╚══██╔══╝██╔══██╗██╔═══██╗██║    ██║██╔══██╗██║   ██║██╔════╝
+██████╔╝█████╗     ██║   ██████╔╝██║   ██║██║ █╗ ██║███████║██║   ██║█████╗
+██╔══██╗██╔══╝     ██║   ██╔══██╗██║   ██║██║███╗██║██╔══██║╚██╗ ██╔╝██╔══╝
+██║  ██║███████╗   ██║   ██║  ██║╚██████╔╝╚███╔███╔╝██║  ██║ ╚████╔╝ ███████╗
+╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝  ╚══╝╚══╝ ╚═╝  ╚═╝  ╚═══╝  ╚══════╝</div>
+      <div class="tagline">░░ OPL3 HAT PLAYER ░░ YMF262-M ░░ REAL HARDWARE SYNTHESIS ░░</div>
+    </div>
+    <div class="viz-container">
+      <div class="viz-bars" id="viz-bars">{% for i in range(18) %}<div class="ch-bar" id="ch{{ i }}"><div class="ch-fill"></div></div>{% endfor %}</div>
+      <div class="viz-label">OPL3</div>
+    </div>
+  </div>
+
+  <!-- LIBRARY -->
+  <div class="section">
+    <div class="section-label">// LIBRARY</div>
+    <div class="file-list" id="file-list">
+      {% for f in files %}
+      <div class="file-item" data-name="{{ f.name }}" data-type="{{ f.type }}" onclick="selectFile(this)">
+        <span class="file-arrow"></span>
+        <span class="file-name">{{ f.name }}</span>
+        <span class="badge badge-{{ f.type }}">{{ f.type|upper }}</span>
+        <button class="del-btn" onclick="deleteFile(event, '{{ f.name }}')">[ x ]</button>
+      </div>
+      {% else %}
+      <div class="file-item no-files">no files — drop some above</div>
+      {% endfor %}
+    </div>
+
+    <div class="upload-zone" id="upload-zone">
+      <div>&#8679; DRAG &amp; DROP HERE</div>
+      <div class="upload-hint">accepted: .mid .vgm .vgz .zip &nbsp;·&nbsp; click to browse</div>
+      <input type="file" id="file-input" accept=".mid,.midi,.vgm,.vgz,.zip" multiple style="display:none">
+    </div>
+    <div class="flash" id="flash"></div>
+  </div>
+
+  <!-- BANK -->
+  <div class="section">
+    <div class="section-label">// INSTRUMENT BANK</div>
+    <select class="bank-select" id="bank-select">
+      {% for b in banks %}
+      <option value="{{ b.id }}">{{ b.id }} — {{ b.name }}</option>
+      {% else %}
+      <option value="0">0 — (default)</option>
+      {% endfor %}
+    </select>
+    <div class="annotation" id="bank-annotation">// bank applies to MIDI conversion</div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="section">
+    <div class="section-label">// CONTROLS</div>
+    <div class="controls">
+      <button class="btn-play" id="btn-play" onclick="doPlay()">[ &#9654; PLAY ]</button>
+      <button class="btn-stop disabled" id="btn-stop" onclick="doStop()">[ &#9632; STOP ]</button>
+    </div>
+  </div>
+
+  <!-- STATUS BAR -->
+  <div class="status-bar">
+    <span>STATUS: <span class="val" id="st-status">READY</span></span>
+    <span>TRACK: <span class="val dim" id="st-track">—</span></span>
+    <span>BANK: <span class="val dim" id="st-bank">—</span></span>
+    <span>OPL3: <span class="val" id="st-opl3">STANDBY</span></span>
+  </div>
+  <div class="marquee-wrap">
+    <div class="marquee" id="marquee">··· RetroWave OPL3 · YMF262-M · Real Hardware FM Synthesis · Ready ···</div>
+  </div>
+
+</div>
+
+<script>
+let selectedFile = null;
+let selectedType = null;
+
+function selectFile(el) {
+  document.querySelectorAll('.file-item').forEach(e => {
+    e.classList.remove('selected');
+    e.querySelector('.file-arrow').textContent = '';
+  });
+  el.classList.add('selected');
+  el.querySelector('.file-arrow').textContent = '▶ ';
+  selectedFile = el.dataset.name;
+  selectedType = el.dataset.type;
+
+  const bankSelect = document.getElementById('bank-select');
+  const bankAnnotation = document.getElementById('bank-annotation');
+  const isMidi = selectedType === 'midi';
+  bankSelect.disabled = !isMidi;
+  bankSelect.classList.toggle('disabled', !isMidi);
+  bankAnnotation.textContent = isMidi
+    ? '// bank applies to MIDI conversion'
+    : '// bank not used for VGM/VGZ playback';
+  bankAnnotation.classList.toggle('dim', !isMidi);
+}
+
+function doPlay() {
+  if (!selectedFile) {
+    showFlash('select a file first', 'error');
+    return;
+  }
+  const bank = parseInt(document.getElementById('bank-select').value) || 0;
+  fetch('/play', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({file: selectedFile, bank: bank})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) showFlash('ERROR: ' + data.error, 'error');
+  })
+  .catch(() => showFlash('ERROR: request failed', 'error'));
+}
+
+function doStop() {
+  fetch('/stop', {method: 'POST'})
+    .then(r => r.json())
+    .catch(() => {});
+}
+
+function deleteFile(evt, name) {
+  evt.stopPropagation();
+  fetch('/file/' + encodeURIComponent(name), {method: 'DELETE'})
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      if (selectedFile === name) { selectedFile = null; selectedType = null; }
+      reloadFileList();
+    } else {
+      showFlash('ERROR: ' + data.error, 'error');
+    }
+  });
+}
+
+function reloadFileList() {
+  fetch('/api/files')
+  .then(r => r.json())
+  .then(files => {
+    const list = document.getElementById('file-list');
+    if (!files.length) {
+      list.innerHTML = '<div class="file-item no-files">no files — drop some above</div>';
+      return;
+    }
+    list.innerHTML = files.map(f => `
+      <div class="file-item" data-name="${esc(f.name)}" data-type="${f.type}" onclick="selectFile(this)">
+        <span class="file-arrow"></span>
+        <span class="file-name">${esc(f.name)}</span>
+        <span class="badge badge-${f.type}">${f.type.toUpperCase()}</span>
+        <button class="del-btn" onclick="deleteFile(event, '${esc(f.name)}')">[ x ]</button>
+      </div>`).join('');
+  });
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showFlash(msg, type) {
+  const el = document.getElementById('flash');
+  el.textContent = msg;
+  el.className = 'flash ' + (type || '');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.textContent = ''; el.className = 'flash'; }, 4000);
+}
+
+function pollStatus() {
+  fetch('/api/status')
+  .then(r => r.json())
+  .then(data => {
+    const playing = data.playing;
+    document.getElementById('st-status').textContent = playing ? 'PLAYING' : 'READY';
+    document.getElementById('st-opl3').textContent = playing ? 'ACTIVE' : 'STANDBY';
+
+    const trackEl = document.getElementById('st-track');
+    trackEl.textContent = data.track || '—';
+    trackEl.classList.toggle('dim', !data.track);
+
+    const bankEl = document.getElementById('st-bank');
+    bankEl.textContent = data.bank !== null && data.bank !== undefined ? data.bank : '—';
+    bankEl.classList.toggle('dim', data.bank === null || data.bank === undefined);
+
+    document.getElementById('btn-stop').classList.toggle('disabled', !playing);
+
+    if (playing && data.track) {
+      const bankStr = data.bank !== null ? ' · BANK: ' + data.bank : '';
+      document.getElementById('marquee').textContent =
+        '··· NOW PLAYING: ' + data.track + bankStr + ' · YMF262-M · OPL3 REAL HARDWARE SYNTHESIS ···';
+    } else {
+      document.getElementById('marquee').textContent =
+        '··· RetroWave OPL3 · YMF262-M · Real Hardware FM Synthesis · Ready ···';
+    }
+  })
+  .catch(() => {});
+}
+
+// Upload — click
+document.getElementById('upload-zone').addEventListener('click', () => {
+  document.getElementById('file-input').click();
+});
+document.getElementById('file-input').addEventListener('change', e => {
+  uploadFiles(e.target.files);
+  e.target.value = '';
+});
+
+// Upload — drag and drop
+const zone = document.getElementById('upload-zone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+zone.addEventListener('drop', e => {
+  e.preventDefault();
+  zone.classList.remove('dragover');
+  uploadFiles(e.dataTransfer.files);
+});
+
+function uploadFiles(files) {
+  Array.from(files).forEach(file => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fetch('/upload', {method: 'POST', body: fd})
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        reloadFileList();
+      } else {
+        showFlash('ERROR: ' + (data.error || 'upload failed'), 'error');
+      }
+    })
+    .catch(() => showFlash('ERROR: upload failed', 'error'));
+  });
+}
+
+pollStatus();
+setInterval(pollStatus, 2000);
+
+// ── VGM Channel Visualizer ────────────────────────────────────────────────
+const _bars = Array.from({length: 18}, (_, i) => ({
+  bar: document.getElementById('ch' + i),
+  fill: document.getElementById('ch' + i).querySelector('.ch-fill'),
+}));
+
+function _updateBars(channels) {
+  channels.forEach(([on, block, vol], i) => {
+    const {bar, fill} = _bars[i];
+    if (on) {
+      const pct = Math.round((vol / 63) * 100);
+      fill.style.height = pct + '%';
+      // block 0-7 maps to brightness: dim at low octave, bright at high
+      fill.style.opacity = (0.35 + (block / 7) * 0.65).toFixed(2);
+      bar.classList.add('ch-active');
+    } else {
+      fill.style.height = '0%';
+      bar.classList.remove('ch-active');
+    }
+  });
+}
+
+const vizSource = new EventSource('/api/visualizer');
+vizSource.onmessage = (e) => {
+  try { _updateBars(JSON.parse(e.data)); } catch(_) {}
+};
+vizSource.onerror = () => {
+  _bars.forEach(({bar, fill}) => { fill.style.height = '0%'; bar.classList.remove('ch-active'); });
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+[Unit]
+Description=RetroWave OPL3 Web UI
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/zaraki/retrowave-ui/app.py
+WorkingDirectory=/home/zaraki/retrowave-ui
+Restart=on-failure
+User=zaraki
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
